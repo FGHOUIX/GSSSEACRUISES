@@ -1,0 +1,263 @@
+import { useEffect, useRef, useState } from "react";
+import { Mic, Send, Sparkles, MessageCircle, X, Home, Grid, Settings, BookOpen, Search, Lock, Unlock, Volume2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+// NOTE: This is a full OS-style demo (frontend only)
+// Google Books API + Speech APIs are optional and safe browser features
+
+export default function EboyAIAssistant() {
+  const [locked, setLocked] = useState(true);
+  const [tab, setTab] = useState("home");
+  const [openChat, setOpenChat] = useState(false);
+
+  const [messages, setMessages] = useState([
+    { role: "assistant", content: "Welcome back. I'm E-Boy Assistant." },
+  ]);
+
+  const [input, setInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [books, setBooks] = useState([]);
+  const [listening, setListening] = useState(false);
+
+  const recognitionRef = useRef(null);
+
+  // ---------------- AI (demo brain) ----------------
+  const aiReply = (text) => {
+    const mood = text.toLowerCase();
+
+    if (mood.includes("sad")) return "Try reading Sapiens or Meditations.";
+    if (mood.includes("focus")) return "Deep Work is a great choice.";
+    if (mood.includes("stress")) return "Atomic Habits can help reset your routine.";
+
+    return `I found ideas for: ${text}`;
+  };
+
+  // ---------------- Send chat ----------------
+  const sendMessage = () => {
+    if (!input.trim()) return;
+
+    const userMsg = { role: "user", content: input };
+    const aiMsg = { role: "assistant", content: aiReply(input) };
+
+    setMessages((p) => [...p, userMsg, aiMsg]);
+
+    // speech output
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(aiMsg.content));
+
+    setInput("");
+  };
+
+  // ---------------- Voice input ----------------
+  const startVoice = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+
+    recognition.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      setInput(text);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  // ---------------- Google Books API ----------------
+  const fetchBooks = async (q) => {
+    if (!q) return;
+
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?q=${q}`
+      );
+      const data = await res.json();
+      setBooks(data.items || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "books") fetchBooks(search);
+  }, [search, tab]);
+
+  const quickActions = ["Focus books", "AI ideas", "Learn faster", "Relax mode"];
+
+  // ---------------- LOCK SCREEN ----------------
+  if (locked) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-black text-white">
+        <motion.div
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setLocked(false)}
+          className="w-32 h-32 rounded-full bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 flex items-center justify-center shadow-2xl cursor-pointer"
+        >
+          <Unlock size={32} />
+        </motion.div>
+        <p className="mt-4 opacity-70">Tap to unlock E-Boy OS</p>
+      </div>
+    );
+  }
+
+  // ---------------- MAIN OS ----------------
+  return (
+    <div className="min-h-screen text-white bg-gradient-to-br from-black via-indigo-950 to-purple-950 relative overflow-hidden">
+      {/* glow */}
+      <div className="absolute inset-0 opacity-40">
+        <div className="absolute w-[500px] h-[500px] bg-purple-600 blur-3xl rounded-full top-[-120px] left-[-120px]" />
+        <div className="absolute w-[500px] h-[500px] bg-blue-600 blur-3xl rounded-full bottom-[-160px] right-[-140px]" />
+      </div>
+
+      {/* top bar */}
+      <div className="relative z-10 flex justify-between px-6 pt-6 text-sm opacity-80">
+        <div>E-Boy Google OS</div>
+        <button onClick={() => setLocked(true)}>
+          <Lock size={18} />
+        </button>
+      </div>
+
+      {/* HOME */}
+      {tab === "home" && (
+        <div className="relative z-10 flex flex-col items-center mt-10">
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setOpenChat(true)}
+            className="w-28 h-28 rounded-full bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 flex items-center justify-center shadow-2xl"
+          >
+            <Sparkles size={32} />
+          </motion.div>
+
+          <h1 className="text-2xl font-semibold mt-4">Assistant</h1>
+          <p className="opacity-70">Google-style AI system</p>
+
+          <div className="mt-8 grid grid-cols-2 gap-3 w-full max-w-md">
+            {quickActions.map((q, i) => (
+              <div key={i} className="bg-white/10 p-3 rounded-2xl text-center">
+                {q}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* APPS */}
+      {tab === "apps" && (
+        <div className="relative z-10 mt-10 grid grid-cols-3 gap-4 px-4">
+          <div className="bg-white/10 p-4 rounded-2xl text-center">AI</div>
+          <div className="bg-white/10 p-4 rounded-2xl text-center">Tools</div>
+          <div className="bg-white/10 p-4 rounded-2xl text-center">Media</div>
+        </div>
+      )}
+
+      {/* BOOKS (Google style + API + search) */}
+      {tab === "books" && (
+        <div className="relative z-10 p-4">
+          <div className="flex items-center bg-white/10 rounded-2xl px-3 py-2 mb-4">
+            <Search />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search Google Books..."
+              className="bg-transparent flex-1 ml-2 outline-none"
+            />
+          </div>
+
+          <div className="space-y-3">
+            {books.map((b, i) => {
+              const info = b.volumeInfo;
+              return (
+                <div key={i} className="bg-white/10 p-3 rounded-xl">
+                  <div className="font-semibold">📖 {info.title}</div>
+                  <div className="text-sm opacity-70">
+                    {info.authors?.join(", ")}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* SETTINGS */}
+      {tab === "settings" && (
+        <div className="relative z-10 p-4">
+          <div className="bg-white/10 p-4 rounded-2xl">
+            <h2 className="font-semibold">System Control</h2>
+            <p className="opacity-70">Voice, AI, and UI settings</p>
+          </div>
+        </div>
+      )}
+
+      {/* floating chat */}
+      <button
+        onClick={() => setOpenChat(true)}
+        className="fixed bottom-20 right-6 w-14 h-14 rounded-full bg-white/10 flex items-center justify-center"
+      >
+        <MessageCircle />
+      </button>
+
+      {/* bottom nav */}
+      <div className="fixed bottom-0 left-0 right-0 bg-black/50 backdrop-blur-xl border-t border-white/10 flex justify-around py-3">
+        <button onClick={() => setTab("home")}><Home /></button>
+        <button onClick={() => setTab("apps")}><Grid /></button>
+        <button onClick={() => setTab("books")}><BookOpen /></button>
+        <button onClick={() => setTab("settings")}><Settings /></button>
+      </div>
+
+      {/* CHAT */}
+      <AnimatePresence>
+        {openChat && (
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-xl z-50 flex flex-col"
+          >
+            <div className="flex justify-between p-4 border-b border-white/10">
+              <div>AI Chat</div>
+              <button onClick={() => setOpenChat(false)}>
+                <X />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {messages.map((m, i) => (
+                <div
+                  key={i}
+                  className={`p-3 rounded-xl max-w-[80%] ${
+                    m.role === "user" ? "ml-auto bg-blue-600" : "bg-white/10"
+                  }`}
+                >
+                  {m.content}
+                </div>
+              ))}
+            </div>
+
+            <div className="p-3 flex gap-2 border-t border-white/10">
+              <button onClick={startVoice} className="p-2 bg-white/10 rounded-xl">
+                <Mic color={listening ? "red" : "white"} />
+              </button>
+
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                className="flex-1 bg-white/5 px-3 rounded-xl"
+                placeholder="Talk or type..."
+              />
+
+              <button onClick={sendMessage} className="bg-purple-600 p-2 rounded-xl">
+                <Send />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
